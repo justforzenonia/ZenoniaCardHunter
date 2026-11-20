@@ -28,7 +28,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         p = (getattr(self, 'path', '') or '').split('?')[0]
         # (/health too, 2026-11-20: the website's "Server online" light on GitHub Pages asks it from another site, and without this
         # header the browser hid the answer, so the light said "Server down" while the server was up)
-        return p.startswith('/market/') or p.startswith('/net/') or p in ('/save/share', '/health')   # (co-op too: the app and the website's game meet in the same rooms)
+        return p.startswith('/market/') or p.startswith('/net/') or p in ('/save/share', '/health', '/cloud/save')   # (co-op too: the app and the website's game meet in the same rooms)
 
     def _private(self):   # (public server: what belongs to one PC only)
         p = (getattr(self, 'path', '') or '').split('?')[0]
@@ -257,6 +257,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/market/'): return self._market('GET')
         if self.path.startswith('/net/'): return self._net('GET')
         if self.path.split('?')[0] in ('/save', '/save/list', '/save/archive', '/save/share'): return self._save('GET')
+        if self.path.split('?')[0] == '/cloud/save': return self._cloud('GET')
         if self.path.split('?')[0] == '/photo/list': return self._photo_list()
         return super().do_GET()
 
@@ -274,8 +275,46 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/market/'): return self._market('POST')
         if self.path.startswith('/net/'): return self._net('POST')
         if self.path.split('?')[0] in ('/save', '/save/share'): return self._save('POST')
+        if self.path.split('?')[0] == '/cloud/save': return self._cloud('POST')
         if self.path.split('?')[0] == '/photo': return self._photo()
         self.send_error(405)
+
+    # ONLINE BACKUP (2026-11-20, js/cloudsave.js): the website's game and the phone app keep the hero only on that one device, so a
+    # cleared browser or a lost phone lost it. Each device makes a private backup code (16 letters, never sent anywhere but here);
+    # the hero is stored under a hash of it, so the database never holds the code itself, and kept 180 days after the last backup.
+    #   POST /cloud/save?k=CODE {profile} -> {ok, at} · GET /cloud/save?k=CODE -> that hero (404 when there is none)
+    # In Upstash on the hosted server (KV_URL), else in saves/cloud/ on this PC. One backup per code every 20 s at most.
+    def _cloud(self, method):
+        import json, re, hashlib, urllib.parse
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        code = re.sub(r'[^A-Z0-9]', '', ((q.get('k') or [''])[0]).upper())
+        if not re.fullmatch(r'[A-Z2-9]{16}', code): return self.send_error(400)
+        h = hashlib.sha256(('zenonia-cloud:' + code).encode()).hexdigest(); key = 'cloud:' + h
+        f = os.path.join(ROOT, 'saves', 'cloud', h + '.json')
+        def out(b):
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b)
+        if method == 'GET':
+            try: body = (kv(['GET', key]) or '').encode() if KV_URL else (open(f, 'rb').read() if os.path.exists(f) else b'')
+            except Exception: return self.send_error(503)
+            return out(body) if body else self.send_error(404)
+        n = int(self.headers.get('Content-Length') or 0)
+        if n < 50 or n > CLOUD_MAX: self.close_connection = True; return self.send_error(413 if n else 400)
+        body = self.rfile.read(n)
+        try: p = json.loads(body)
+        except Exception: return self.send_error(400)
+        if not isinstance(p, dict) or not p.get('lv') or not isinstance(p.get('gear'), list): return self.send_error(400)
+        now = time.time()
+        with SAVE_LOCK:
+            if now - CLOUD_LAST.get(h, 0) < 20: return self.send_error(429)
+            CLOUD_LAST[h] = now
+            if len(CLOUD_LAST) > 20000: CLOUD_LAST.clear()
+        try:
+            if KV_URL: kv(['SET', key, body.decode('utf-8'), 'EX', str(180 * 86400)])
+            else:
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                with open(f, 'wb') as o: o.write(body)
+        except Exception: return self.send_error(503)
+        return out(json.dumps({ 'ok': 1, 'at': int(now * 1000) }).encode())
 
     def _photo(self):
         # PHOTO (F2 in the game, js/photo.js): a JPEG of the world, saved into the game folder's photos/ (this computer only)
@@ -298,6 +337,7 @@ import threading, time
 ROOMS, NET_LOCK, NET_IPS = {}, threading.Lock(), None
 SHARES = {}   # (moving a hero: code -> (profile bytes, expiry), _save /save/share)
 SAVE_LOCK = threading.Lock()
+CLOUD_LAST, CLOUD_MAX = {}, 400 << 10   # (online backups: when each code last saved; the biggest hero accepted, 400 KB)
 MARKET_LOCK, MARKET_DAYS, MARKET_MAX = threading.Lock(), 7, 20   # (the market board: one change at a time; listings last a week; 20 each)
 
 

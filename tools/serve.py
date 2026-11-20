@@ -26,7 +26,9 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
     # game's files, the save slots and the photos stay for pages served from here.
     def _shared(self):
         p = (getattr(self, 'path', '') or '').split('?')[0]
-        return p.startswith('/market/') or p.startswith('/net/') or p == '/save/share'   # (co-op too: the app and the website's game meet in the same rooms)
+        # (/health too, 2026-11-20: the website's "Server online" light on GitHub Pages asks it from another site, and without this
+        # header the browser hid the answer, so the light said "Server down" while the server was up)
+        return p.startswith('/market/') or p.startswith('/net/') or p in ('/save/share', '/health')   # (co-op too: the app and the website's game meet in the same rooms)
 
     def _private(self):   # (public server: what belongs to one PC only)
         p = (getattr(self, 'path', '') or '').split('?')[0]

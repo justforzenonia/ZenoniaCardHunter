@@ -27,7 +27,9 @@
       let timer = setTimeout(() => ac.abort(), stallMs); const poke = () => { clearTimeout(timer); timer = setTimeout(() => ac.abort(), stallMs); };
       try {
         const r = await fetch(attempt ? `${url}?v=${v}_${attempt}` : `${url}?v=${v}`, { signal: ac.signal });
-        const want = +(r.headers.get('content-length') || 0); if (want) PROG.want[url] = want; PROG.got[url] = 0; poke();
+        // (2026-11-20, the user: "stuck in loading" on the website) GitHub Pages sends files gzipped, and its content-length is the
+        // ZIPPED size while the body arrives unzipped and bigger, so the whole-file check failed every time: a zipped reply is not size-checked
+        const zipped = !!r.headers.get('content-encoding'), want = zipped ? 0 : +(r.headers.get('content-length') || 0); if (want) PROG.want[url] = want; PROG.got[url] = 0; poke();
         let buf;
         if (r.body && r.body.getReader) {
           const rd = r.body.getReader(), parts = []; let n = 0;

@@ -165,13 +165,21 @@
 
 <script>
   // the server light: green while this server answers (co-op, market and hero codes need it)
-  (function check() {
-    // (the game server is on another site when the page is on GitHub Pages; a sleeping free server takes up to a minute to wake)
-    var s = document.getElementById('status'), srv = 'https://zenonia-card-hunters.onrender.com', done = false;
-    setTimeout(function () { if (!done) s.lastChild.textContent = 'Server waking up…'; }, 3000);
-    fetch((srv ? srv + '/' : '') + 'health', { cache: 'no-store' }).then(function (r) { done = true; s.className = 'status ' + (r.ok ? 'on' : 'off'); s.lastChild.textContent = r.ok ? 'Server online' : 'Server down'; })
-      .catch(function () { done = true; s.className = 'status off'; s.lastChild.textContent = 'Server down'; });
-    setTimeout(check, 60000);
+  (function () {
+    // (2026-11-20, the user: "server still says down") the free server sleeps between the keep-awake visits (GitHub runs them
+    // late, about every 50 minutes) and refuses calls while it starts up, so one failed call is not "down": keep asking every
+    // 5 s, saying "waking up", and only after 3 minutes of no answer say "Server down". Online, ask again every minute.
+    var s = document.getElementById('status'), srv = 'https://zenonia-card-hunters.onrender.com', since = 0, timer = 0;
+    function show(cls, txt) { s.className = 'status ' + cls; s.lastChild.textContent = txt; }
+    function again(ms) { clearTimeout(timer); timer = setTimeout(check, ms); }
+    function fail() { if (!since) since = Date.now(); if (Date.now() - since > 180000) { show('off', 'Server down'); again(30000); } else { show('', 'Server waking up…'); again(5000); } }
+    function check() {
+      var slow = setTimeout(function () { if (!since) show('', 'Server waking up…'); }, 3000);
+      fetch((srv ? srv + '/' : '') + 'health', { cache: 'no-store' })
+        .then(function (r) { clearTimeout(slow); if (r.ok) { since = 0; show('on', 'Server online'); again(60000); } else fail(); })
+        .catch(function () { clearTimeout(slow); fail(); });
+    }
+    check();
   })();
 </script>
 </body>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0c0f16">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon_192.png">
+<link rel="apple-touch-icon" href="assets/icon_192.png">
+<title>Zenonia Card Hunters</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0f16; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #load { position: absolute; color: #c9a85a; font: bold 14px "Trebuchet MS", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<script>window.ZCH_STATIC = 1; window.ZCH_SERVER = 'https://zenonia-card-hunters.onrender.com';</script>
+<div id="load">Loading…</div>
+<canvas id="c" width="640" height="360"></canvas>
+<script>
+  // the script list lives in js/boot.js, always loaded fresh (so a cached copy of this page never runs stale code)
+  document.write('<script src="js/boot.js?v=1.0.0"><\/script>');
+</script>
+</body>
+</html>

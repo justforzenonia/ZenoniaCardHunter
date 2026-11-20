@@ -1,0 +1,3 @@
+assets/animals: "LPC style farm animals" by Daniel Eddeland (daneeklu), commissioned by tebruno99
+https://opengameart.org/content/lpc-style-farm-animals
+Used under CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/). The page also offers GPL 2.0. Unchanged.

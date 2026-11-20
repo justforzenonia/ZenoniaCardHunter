@@ -1,0 +1,13 @@
+# Keeps the free game server on Render awake: it sleeps after 15 quiet minutes, and then the first player waits ~1 minute.
+name: keep the game server awake
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS --max-time 90 "$SERVER/health" || (sleep 30 && curl -fsS --max-time 90 "$SERVER/health")
+        env:
+          SERVER: https://zenonia-card-hunters.onrender.com

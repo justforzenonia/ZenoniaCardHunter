@@ -1,0 +1,2 @@
+// built by tools/build_cave_arch.py: Zenonia 2 bank 100, the arch over a purple swirl (the caves' way in)
+window.CAVE_ARCH = {"imgs":["assets/cavearch100_p0.png"],"frames":[[0,0,48,47,-23,-40],[49,0,48,47,-23,-40],[98,0,48,47,-23,-40]],"anims":{"idle":[[[0,132,0,0],[1,132,0,0],[2,132,0,0]],[[0,132,0,0],[1,132,0,0],[2,132,0,0]],[[0,132,0,0],[1,132,0,0],[2,132,0,0]],[[0,132,0,0],[1,132,0,0],[2,132,0,0]]]},"h":47};

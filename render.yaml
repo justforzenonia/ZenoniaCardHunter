@@ -1,0 +1,21 @@
+# The game server on Render's free plan (tools/deploy_github.py writes this file). Blueprint: Render reads it when the
+# repository is connected. The market board is kept in Upstash: set its two values in Render's dashboard (Environment).
+services:
+  - type: web
+    name: zenonia-card-hunters
+    runtime: python
+    plan: free
+    buildCommand: "echo no build needed"
+    startCommand: "python tools/serve.py --public --lan"
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - tools/serve.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

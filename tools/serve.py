@@ -196,7 +196,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         def out(obj, code=200):
             b = json.dumps(obj).encode(); self.send_response(code); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b)
         port = self.server.server_address[1]; f = os.path.join(ROOT, 'saves', 'market_%d.json' % port)
-        try: req = json.loads(body) if body else {}
+        try: req = json.loads(body, parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c))) if body else {}   # (no NaN / Infinity)
         except Exception: return out({ 'err': 'bad request' }, 400)
         mid = str(req.get('mid') or (q.get('mid') or [''])[0])[:40]
         with MARKET_LOCK:
@@ -229,10 +229,13 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
             elif u.path == '/market/post':
                 kind, item, price = req.get('kind'), req.get('item'), req.get('price')
                 if kind not in ('card', 'gear') or not isinstance(item, dict) or not isinstance(price, int) or not (1 <= price <= 10000000): res = ({ 'err': 'bad listing' }, 400)
+                elif not market_item_ok(kind, item): res = ({ 'err': 'That is not a real item' }, 400)
+                elif len(M['listings']) >= MARKET_ALL: res = { 'err': 'The market is full right now: try again later' }
+                elif not market_post_ok(self.client_address[0], now): res = { 'err': 'Slow down a little: a few listings a minute' }
                 elif sum(1 for L in M['listings'] if L['seller'] == mid) >= MARKET_MAX: res = { 'err': 'You can have %d listings at once' % MARKET_MAX }
                 else:
                     lid = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
-                    M['listings'].append({ 'id': lid, 'seller': mid, 'sname': str(req.get('sname') or 'hero')[:24], 'kind': kind, 'item': item, 'price': price, 'at': now })
+                    M['listings'].append({ 'id': lid, 'seller': mid, 'sname': market_name(req.get('sname')), 'kind': kind, 'item': item, 'price': price, 'at': now })
                     changed = True; res = { 'ok': True, 'id': lid }
             elif u.path in ('/market/buy', '/market/cancel'):
                 L = next((L for L in M['listings'] if L['id'] == req.get('id')), None)
@@ -243,7 +246,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
                     M['listings'].remove(L); changed = True
                     if u.path == '/market/buy':
                         M['earned'][L['seller']] = M['earned'].get(L['seller'], 0) + L['price']
-                        M['sold'].setdefault(L['seller'], []).append({ 'name': (L['item'].get('name') or L['item'].get('sp') or 'item'), 'kind': L['kind'], 'price': L['price'], 'buyer': str(req.get('bname') or 'someone')[:24], 'at': now })
+                        M['sold'].setdefault(L['seller'], []).append({ 'name': (L['item'].get('name') or L['item'].get('sp') or 'item'), 'kind': L['kind'], 'price': L['price'], 'buyer': market_name(req.get('bname'), 'someone'), 'at': now })
                     res = { 'ok': True, 'item': L['item'], 'kind': L['kind'], 'price': L['price'] }
             elif u.path == '/market/collect':
                 res = { 'gold': M['earned'].pop(mid, 0), 'sold': M['sold'].pop(mid, []), 'back': M['back'].pop(mid, []) }; changed = True
@@ -339,6 +342,49 @@ SHARES = {}   # (moving a hero: code -> (profile bytes, expiry), _save /save/sha
 SAVE_LOCK = threading.Lock()
 CLOUD_LAST, CLOUD_MAX = {}, 400 << 10   # (online backups: when each code last saved; the biggest hero accepted, 400 KB)
 MARKET_LOCK, MARKET_DAYS, MARKET_MAX = threading.Lock(), 7, 20   # (the market board: one change at a time; listings last a week; 20 each)
+MARKET_ALL, MARKET_POSTS = 600, {}   # (2026-11-20: at most 600 listings on the board; each address's recent post times)
+
+
+# A SAFER MARKET (2026-11-20; js/marketcheck.js has the game's own, finer check). The server only knows the item's SHAPE, which is
+# enough to keep out anything that could break the buyer's save: plain data (no deeper than 6, no list over 12, no more than 40
+# keys, short strings, whole JSON under 12 KB), a rank 0-9, a card with a species name or a fusion of 2-4 such cards, and gear
+# with a real slot and a stats table of plain numbers 0-100000.
+def market_item_ok(kind, it):
+    import json
+    try: n = len(json.dumps(it))
+    except Exception: return False
+    if n > 12000: return False
+    def plain(v, d=0):
+        if d > 6: return False
+        if v is None or isinstance(v, bool): return True
+        if isinstance(v, (int, float)): return v == v and abs(v) < 1e9
+        if isinstance(v, str): return len(v) <= 80
+        if isinstance(v, list): return len(v) <= 12 and all(plain(x, d + 1) for x in v)
+        if isinstance(v, dict): return len(v) <= 40 and all(isinstance(k, str) and len(k) <= 40 and k not in ('__proto__', 'constructor', 'prototype') and plain(x, d + 1) for k, x in v.items())
+        return False
+    rank = lambda t: isinstance(t, int) and not isinstance(t, bool) and 0 <= t <= 9
+    def card(c, d=0):
+        if not isinstance(c, dict) or not rank(c.get('tier')): return False
+        f = c.get('fusion')
+        if f: return d < 3 and isinstance(f, list) and 2 <= len(f) <= 4 and isinstance(c.get('name'), str) and all(card(x, d + 1) for x in f)
+        return isinstance(c.get('sp'), str) and 0 < len(c['sp']) <= 12
+    if not plain(it): return False
+    if kind == 'card': return card(it)
+    st = it.get('stats')
+    return it.get('slot') in ('head', 'body', 'weapon', 'accessory', 'boots', 'trinket') and rank(it.get('tier')) and isinstance(st, dict) and         all(isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100000 for v in st.values())
+
+
+def market_name(v, dflt='hero'):   # a hero's name on the board: printable, 24 letters at most
+    s = ''.join(ch for ch in str(v or '') if ch.isprintable())[:24].strip()
+    return s or dflt
+
+
+def market_post_ok(ip, now):   # a few listings a minute from one address (6), so nobody can flood the board
+    L = [t for t in MARKET_POSTS.get(ip, []) if now - t < 60]
+    if len(L) >= 6: MARKET_POSTS[ip] = L; return False
+    L.append(now); MARKET_POSTS[ip] = L
+    if len(MARKET_POSTS) > 5000: MARKET_POSTS.clear()
+    return True
 
 
 # A REPLACED HERO IS KEPT: when an incoming save looks like a different hero (another name) or a much weaker one (2+ levels

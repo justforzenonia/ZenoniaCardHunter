@@ -1,0 +1,26 @@
+# Daily check that the live game still loads and plays (tools/smoke_test.js), and that the game server answers.
+name: daily site check
+on:
+  schedule:
+    - cron: '23 14 * * *'
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/sitecheck.yml', 'tools/smoke_test.js']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: wait for the new site (only right after a push)
+        if: github.event_name == 'push'
+        run: sleep 150
+      - name: the game server answers
+        run: curl -fsS --max-time 90 "$SERVER/health" || (sleep 45 && curl -fsS --max-time 90 "$SERVER/health")
+        env:
+          SERVER: https://zenonia-card-hunters.onrender.com
+      - name: the live game loads and plays
+        run: node tools/smoke_test.js --live --wait 180

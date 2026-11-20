@@ -23,4 +23,6 @@ jobs:
         env:
           SERVER: https://zenonia-card-hunters.onrender.com
       - name: the live game loads and plays
-        run: node tools/smoke_test.js --live --wait 180
+        run: |
+          set -o pipefail
+          node tools/smoke_test.js --live --wait 180 2>&1 | tee smoke.txt || { tail -n 25 smoke.txt | sed 's/^/::error::/'; exit 1; }

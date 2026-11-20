@@ -639,8 +639,8 @@ function speedOf(a) {
   return s;
 }
 
-// Dash: a quick burst in the held direction (or facing). 1s cooldown, invincible while dashing.
-const DASH = { speed: 420, dur: 170, iframes: 260, cd: 1000, escapeArena: 8000 };
+// Dash: a quick burst in the held direction (or facing). 2 s cooldown (1 s until 2026-11-20, the user: "give dash a 2 sec cool down"), invincible while dashing.
+const DASH = { speed: 420, dur: 170, iframes: 260, cd: 2000, escapeArena: 8000 };
 // in the arena (Versus and Ranked), dashing out of being hit (hitstun, a juggle, a knockdown) costs the dash for 8 s
 const inArenaWorld = w => !!(window.GAME && GAME.scene === 'arena' && GAME.world === w);
 function dashEscape(world, a) { if (inArenaWorld(world)) a.dashCd = a.dashCdMax = DASH.escapeArena; breakFree(world, a); }

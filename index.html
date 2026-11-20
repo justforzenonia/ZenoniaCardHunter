@@ -81,6 +81,9 @@
   @media (max-width: 600px) {
     body { font-size: 16px; }
     .bar nav a.opt { display: none; }
+    .bar { gap: 8px; }
+    .bar nav a { padding: 4px 7px; }
+    .bar .status > span { display: none; }   /* (just the light on phones, so the menu fits) */
     .btn { width: 100%; justify-content: center; }
     .hero { padding-top: 28px; }
   }
@@ -91,10 +94,11 @@
 <div class="bar">
   <a class="name" href="#top"><img src="site/icon_192.png" alt="">Card Hunters</a>
   <nav>
-    <a href="play/">Play</a>
+    <a class="opt" href="play/">Play</a>
+    <a href="play/guide/">How to Play</a>
+    <a href="cards.html">Cards</a>
     <a class="opt" href="#android">Android</a>
-    <a href="#community">Community</a>
-    <a class="opt" href="play/guide/">Guide</a>
+    <a class="opt" href="#community">Community</a>
   </nav>
   <span class="status" id="status" title="Online co-op, the market and hero codes run on this server"><i></i><span>Server</span></span>
 </div>
@@ -125,6 +129,15 @@
     </div>
   </section>
 
+  <section id="learn">
+    <h2>New here?</h2>
+    <p class="lead">The guide walks you through the controls, combat, your deck, the farm and online co-op, with pictures from the game. The card list shows every card, its spell and its passive.</p>
+    <div class="btns" style="justify-content:flex-start">
+      <a class="btn" href="play/guide/"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5a1 1 0 0 0 0 2H20v1H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>How to Play</a>
+      <a class="btn" href="cards.html"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5 13.5 3.7l3.6 13.5-10.5 2.8zM14.6 5l4.9 1.3-3.6 13.5-1.2-.3 2.8-10.6z"/></svg>Card List</a>
+    </div>
+  </section>
+
   
 
   <section id="android">
@@ -146,7 +159,7 @@
 </main>
 
 <footer>
-  <p><strong>Zenonia Card Hunters</strong> · version 1.0.0 · <a href="play/guide/">Player guide</a></p>
+  <p><strong>Zenonia Card Hunters</strong> · version 1.0.0 · <a href="play/guide/">How to Play</a> · <a href="cards.html">Card list</a></p>
   <p>An unofficial, free fan game made for fun. Not affiliated with or endorsed by Gamevil or Com2uS. Zenonia and its original art and music belong to their owners.</p>
 </footer>
 

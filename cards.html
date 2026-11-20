@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<base href="play/">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zenonia Card List</title>
+<!-- A live sheet of every card in the game: its spell and its passive. It reads the game's own js/defs.js every time it
+     loads, and checks that file every few seconds, so whenever the cards change it refreshes by itself. -->
+<style>
+  :root { --bg: #120d1c; --panel: #1d1529; --row: #22192f; --row2: #1a1326; --line: #3a2c4c; --gold: #ffd23f; --ink: #f1e8d6; --soft: #a99cba; }
+  * { box-sizing: border-box; }
+  /* the header stays put and the table scrolls under it, so the column names can stick to its top */
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font: 13px/1.4 Arial, sans-serif; }
+  header { flex: none; background: linear-gradient(#24183a, #1a1229); border-bottom: 2px solid #8a6a2a; padding: 10px 16px; }
+  h1 { margin: 0 0 8px; font-size: 20px; letter-spacing: 2px; color: var(--gold); text-shadow: 0 1px 0 #6a4a10; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input, select, button { font: inherit; color: var(--ink); background: #2b2040; border: 1px solid #5a4670; border-radius: 6px; padding: 5px 9px; }
+  input { width: 220px; max-width: 100%; }
+  button { cursor: pointer; background: #4a3010; border-color: #c89a4a; color: #ffe9a8; }
+  button:hover { background: #6a4418; }
+  .live { margin-left: auto; color: var(--soft); font-size: 12px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #5cff8a; margin-right: 5px; box-shadow: 0 0 6px #5cff8a; }
+  .wrap { flex: 1; overflow: auto; padding: 0 16px 24px; }
+  table { border-collapse: collapse; width: 100%; min-width: 1300px; }
+  th { position: sticky; top: 0; z-index: 2; background: #2e2142; color: var(--gold); text-align: left; padding: 7px 8px; border-bottom: 1px solid #8a6a2a; cursor: pointer; white-space: nowrap; user-select: none; }
+  th.sorted::after { content: ' ▲'; } th.sorted.desc::after { content: ' ▼'; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:nth-child(odd) td { background: var(--row); } tr:nth-child(even) td { background: var(--row2); }
+  tr:hover td { background: #33244a; }
+  .name { font-weight: bold; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: bold; color: #120d1c; white-space: nowrap; }
+  .soft { color: var(--soft); }
+  .num { text-align: right; white-space: nowrap; }
+  #status { padding: 30px 16px; color: var(--soft); }
+  td.art { padding: 2px 6px; } td.art img { width: 48px; height: 48px; image-rendering: pixelated; display: block; background: #15131f; border-radius: 6px; }
+</style>
+</head>
+<body>
+<canvas id="c" hidden></canvas>
+<header>
+  <h1><a href="../" style="color:inherit;text-decoration:none">&larr;</a> ZENONIA · CARD LIST</h1>
+  <div class="bar">
+    <input id="q" placeholder="Search name, spell, passive…">
+    <select id="type"><option value="">All types</option></select>
+    <select id="el"><option value="">All elements</option></select>
+    <button id="csv">Download for Excel (.csv)</button>
+    <span class="live"><span class="dot"></span><span id="count"></span><span id="when" hidden></span></span>
+  </div>
+</header>
+<div id="status">Loading the cards from the game…</div>
+<div class="wrap"><table id="t" hidden><thead><tr id="head"></tr></thead><tbody id="body"></tbody></table></div>
+<script>
+'use strict';
+// the game files that hold the cards; core.js and the data file come first because defs.js needs them
+const FILES = ['assets/data.js', 'assets/custom_banks.js', 'assets/raid_bosses.js', 'assets/raid_bosses2.js', 'assets/spell_fx.js', 'assets/spellcraft.js', 'assets/kiblast.js', 'js/core.js', 'js/defs.js', 'js/raidcards.js'];
+const WATCH = ['js/defs.js', 'js/raidcards.js'];
+const get = url => fetch(`${url}?v=${Date.now()}`, { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(url); return r.text(); });
+
+async function boot() {
+  // never touch the game's save from this page
+  try { const set = localStorage.setItem.bind(localStorage); localStorage.setItem = (k, v) => { if (!/zenonia/i.test(k)) set(k, v); }; } catch (e) {}
+  const texts = await Promise.all(FILES.map(get));
+  for (let i = 0; i < FILES.length; i++) { const s = document.createElement('script'); s.textContent = texts[i] + `\n//# sourceURL=${FILES[i]}`; document.body.appendChild(s); }
+  await loadArt();
+  build();
+}
+
+// ---------------------------------------------------------------- the rows
+const TYPE_OF = sp => sp.ki ? 'Ki' : sp.chef ? 'Chef skill' : sp.arcana ? 'Arcana' : sp.npc ? 'Villager' : sp.raid ? 'Raid boss' : 'Monster';
+const TYPE_COL = { Ki: '#9fe8ff', Monster: '#ff9a7a', Villager: '#9fe8ff', Arcana: '#d9a8ff', 'Chef skill': '#ffd27a', 'Raid boss': '#ff6ad0' };
+const sec = ms => (ms / 1000).toFixed(1);
+let ROWS = [];
+function cardRows() {
+  const out = [];
+  for (const [id, sp] of Object.entries(SPECIES)) {
+    if (!sp.chef && !sp.arcana && !sp.npc && !D.monsters[id]) continue;   // a monster with no art never appears in the game
+    const lo = cardSpell({ sp: id, tier: 0 }), hi = cardSpell({ sp: id, tier: 9 }), P = PASSIVES[sp.sig], A = ARCH[sp.spell.a], E = ELEMENTS[sp.spell.el];
+    const does = sp.spell.d || `${cap(A.desc)}${sp.spell.a === 'rain' ? ` (${lo.count}–${hi.count} strikes)` : sp.spell.a === 'bolt' ? ` (${lo.count}–${hi.count} projectiles)` : ''}`;
+    out.push({
+      id, card: sp.name, type: TYPE_OF(sp), element: E.name, elCol: E.col,
+      spell: sp.spell.n, kind: A.name, does, bonus: sp.spell.always ? `Always: ${E.desc}` : `S+ rank: ${E.desc}`,
+      mp: lo.mp, cd: `${sec(hi.cd)}–${sec(lo.cd)}`, powF: lo.power, powMax: hi.power,
+      passive: sp.trait || P.name, passiveKind: P.name, effF: P.fmt(passiveValue(sp.sig, 0)), effMax: P.fmt(passiveValue(sp.sig, 9)),
+    });
+  }
+  return out;
+}
+const COLS = [
+  ['art', 'Art'], ['id', 'ID'], ['card', 'Card'], ['type', 'Type'], ['element', 'Element'], ['spell', 'Spell'], ['kind', 'Spell type'],
+  ['does', 'What the spell does'], ['bonus', 'Element bonus'], ['mp', 'MP'], ['cd', 'Cooldown (s, SSS+–F)'],
+  ['powF', 'Power (F)'], ['powMax', `Power (${RANKS_LAST()})`], ['passive', 'Passive'], ['passiveKind', 'Passive type'],
+  ['effF', 'Passive at F'], ['effMax', `Passive at ${RANKS_LAST()}`],
+];
+function RANKS_LAST() { return 'SSS+'; }
+
+// ---------------------------------------------------------------- card art (the same pictures the game's cards show)
+// monsters and villagers: their idle frame facing you; Arcana / Ki: the spell's effect at its peak on a glow in the
+// element's colour; Chef skills: their kitchen icon. Drawn once per card into a small picture.
+const ART = {}, PICS = {};
+const pic = src => PICS[src] || (PICS[src] = new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; }));
+async function loadArt() {
+  D.spellFx = D.spellFx || 'assets/spell_fx.png'; D.spellcraft = D.spellcraft || 'assets/spellcraft.png';   // (set by combat.js in the game)
+  const srcs = new Set(['assets/chef_icons.png', D.spellFx, D.spellcraft]);
+  for (const M of Object.values(D.monsters)) srcs.add(M.imgs[0]);
+  for (const N of Object.values(D.npcs)) srcs.add(N.imgs[0]);
+  for (const F of Object.values(window.SPELL_FX || {})) if (F.img) srcs.add(F.img);
+  await Promise.all([...srcs].filter(Boolean).map(s => pic(s).then(i => { PICS[s] = i; })));
+}
+function artFor(id) {
+  if (ART[id]) return ART[id];
+  const S = 64, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  const sp = SPECIES[id], glow = col => { const r = g.createRadialGradient(S / 2, S / 2, 1, S / 2, S / 2, S / 2); r.addColorStop(0, col); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, S, S); };
+  if (sp.chef) {
+    glow('rgba(255,255,255,0.45)'); const im = PICS['assets/chef_icons.png']; if (im) g.drawImage(im, sp.ico * 32, 0, 32, 32, 8, 8, 48, 48);
+  } else if (sp.arcana) {
+    glow(ELEMENTS[sp.spell.el].col + 'aa');
+    const key = sp.spell.art || sp.spell.vfx, M = (window.SPELL_FX || {})[key];
+    if (M && M.atlas) { const im = PICS[M.img || D.spellcraft]; if (im) { const k = Math.min(M.peak || 0, M.n - 1), s = S * 0.95 / Math.max(M.w, M.h); g.drawImage(im, k * M.w, M.y, M.w, M.h, S / 2 - M.w * s / 2, S / 2 - M.h * s / 2, M.w * s, M.h * s); } }
+    else if (M) { const im = PICS[D.spellFx]; if (im) g.drawImage(im, Math.min(M.peak || 0, M.n - 1) * 64, M.row * 64, 64, 64, 0, 0, S, S); }
+  } else {
+    const B = charBank(id); if (B) {
+      const seq = (B.anims.idle || B.anims.walk)[2], rec = seq && B.frames[seq[0][0]], im = PICS[B.imgs[0]];
+      if (rec && im) { const s = Math.min(2, (S - 6) / rec[2], (S - 6) / rec[3]); g.drawImage(im, rec[0], rec[1], rec[2], rec[3], S / 2 - rec[2] * s / 2, S / 2 - rec[3] * s / 2, rec[2] * s, rec[3] * s); }
+    }
+  }
+  return (ART[id] = c.toDataURL());
+}
+
+// ---------------------------------------------------------------- the table
+const st = Object.assign({ q: '', type: '', el: '', sort: 'card', desc: false }, (() => { try { return JSON.parse(sessionStorage.getItem('cardsView')) || {}; } catch (e) { return {}; } })());
+const keep = () => { try { sessionStorage.setItem('cardsView', JSON.stringify(st)); } catch (e) {} };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function build() {
+  ROWS = cardRows();
+  const fill = (sel, vals) => { for (const v of vals) sel.insertAdjacentHTML('beforeend', `<option>${esc(v)}</option>`); };
+  fill(document.getElementById('type'), [...new Set(ROWS.map(r => r.type))]);
+  fill(document.getElementById('el'), [...new Set(ROWS.map(r => r.element))].sort());
+  document.getElementById('q').value = st.q; document.getElementById('type').value = st.type; document.getElementById('el').value = st.el;
+  document.getElementById('head').innerHTML = COLS.map(([k, l]) => `<th data-k="${k}">${esc(l)}</th>`).join('');
+  document.getElementById('status').remove(); document.getElementById('t').hidden = false;
+  document.getElementById('when').textContent = new Date().toLocaleTimeString();
+  draw();
+}
+function visible() {
+  const q = st.q.toLowerCase();
+  return ROWS.filter(r => (!st.type || r.type === st.type) && (!st.el || r.element === st.el) &&
+    (!q || [r.card, r.spell, r.passive, r.passiveKind, r.does, r.id].some(v => String(v).toLowerCase().includes(q))))
+    .sort((a, b) => { const x = a[st.sort], y = b[st.sort], c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y)); return st.desc ? -c : c; });
+}
+function draw() {
+  const rows = visible();
+  document.getElementById('count').textContent = `${rows.length} of ${ROWS.length} cards`;
+  for (const th of document.querySelectorAll('th')) { th.classList.toggle('sorted', th.dataset.k === st.sort); th.classList.toggle('desc', th.dataset.k === st.sort && st.desc); }
+  document.getElementById('body').innerHTML = rows.map(r => `<tr>
+    <td class="art"><img alt="" src="${artFor(r.id)}"></td><td class="soft">${esc(r.id)}</td><td class="name">${esc(r.card)}</td>
+    <td><span class="tag" style="background:${TYPE_COL[r.type]}">${esc(r.type)}</span></td>
+    <td><span class="tag" style="background:${r.elCol}">${esc(r.element)}</span></td>
+    <td class="name">${esc(r.spell)}</td><td>${esc(r.kind)}</td><td>${esc(r.does)}</td><td class="soft">${esc(r.bonus)}</td>
+    <td class="num">${r.mp}</td><td class="num">${r.cd}</td><td class="num">${r.powF}</td><td class="num">${r.powMax}</td>
+    <td class="name">${esc(r.passive)}</td><td>${esc(r.passiveKind)}</td><td>${esc(r.effF)}</td><td>${esc(r.effMax)}</td></tr>`).join('');
+}
+document.getElementById('head').addEventListener('click', e => { const k = e.target.dataset.k; if (!k || k === 'art') return; st.desc = st.sort === k ? !st.desc : false; st.sort = k; keep(); draw(); });
+for (const id of ['q', 'type', 'el']) document.getElementById(id).addEventListener('input', e => { st[id] = e.target.value; keep(); draw(); });
+
+// ---------------------------------------------------------------- Excel export (CSV with a BOM so Excel reads the symbols)
+document.getElementById('csv').addEventListener('click', () => {
+  const cell = v => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = [COLS.map(c => cell(c[1])).join(',')].concat(visible().map(r => COLS.map(([k]) => cell(r[k])).join(','))).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = 'zenonia_cards.csv'; a.click();
+});
+
+// ---------------------------------------------------------------- live: when the card file changes, reload
+function watch(seen) {
+  setInterval(async () => {
+    for (const f of WATCH) { try { if (await get(f) !== seen[f]) { location.reload(); return; } } catch (e) {} }
+    document.getElementById('when').textContent = new Date().toLocaleTimeString();
+  }, 3000);
+}
+boot().catch(e => { document.getElementById('status').textContent = `Could not load the cards (${e.message}). Try reloading the page.`; });
+</script>
+</body>
+</html>

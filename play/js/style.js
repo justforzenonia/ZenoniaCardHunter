@@ -129,9 +129,11 @@ function classBanks(cls, look, wlook) {
     body: C.sheet && window.CHEF_BODY ? CHEF_BODY : recolorBank(S.body, lk.hair || C.hair, lk.outfit || C.outfit, lk.skin),
     // casters don't swing a sword: no weapon / slash layers, a floating focus instead
     // (Chef Daddy swings a frying pan: assets/chef_pan.png)
-    weapon: C.focus || C.fist ? null : C.sheet && window.CHEF_PAN ? CHEF_PAN : S.weapons[wlook || 0], fx: C.focus || C.fist ? null : S.fx, anims: holdBlankFrames(S.anims, S.body.frames), fist: !!C.fist,
-    glow: lk.wglow && WEAPON_GLOWS[lk.wglow] && WEAPON_GLOWS[lk.wglow].swatch ? `drop-shadow(0 0 1.5px ${WEAPON_GLOWS[lk.wglow].swatch}) drop-shadow(0 0 3px ${WEAPON_GLOWS[lk.wglow].swatch})` : C.glow ? GLOW[C.glow] : null,
-    focus: C.focus || null, focusGlow: lk.wglow && WEAPON_GLOWS[lk.wglow] && WEAPON_GLOWS[lk.wglow].swatch || (C.glow === 'arcane' ? '#9fb8ff' : '#8fffd0'),
+    // (a Zenonia 2 caster, Morpice, keeps his original weapon and attack layers)
+    weapon: (C.focus && !C.z2) || C.fist ? null : C.sheet && window.CHEF_PAN ? CHEF_PAN : S.weapons[wlook || 0], fx: (C.focus && !C.z2) || C.fist ? null : S.fx, anims: holdBlankFrames(S.anims, S.body.frames), fist: !!C.fist,
+    glow: lk.wglow && WEAPON_GLOWS[lk.wglow] && WEAPON_GLOWS[lk.wglow].swatch ? `drop-shadow(0 0 1.5px ${WEAPON_GLOWS[lk.wglow].swatch}) drop-shadow(0 0 3px ${WEAPON_GLOWS[lk.wglow].swatch})` : C.glow && !(C.focus && C.z2) ? GLOW[C.glow] : null,
+    // (a Zenonia 2 hero keeps his own sheet as is: Morpice holds only his spellbook, no floating orb or painted fist)
+    focus: C.focus && !C.z2 ? C.focus : null, focusGlow: lk.wglow && WEAPON_GLOWS[lk.wglow] && WEAPON_GLOWS[lk.wglow].swatch || (C.glow === 'arcane' ? '#9fb8ff' : '#8fffd0'),
     aura: lk.aura && AURAS[lk.aura] && AURAS[lk.aura].swatch || null,
   };
 }

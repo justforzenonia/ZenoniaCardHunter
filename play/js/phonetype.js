@@ -24,7 +24,9 @@ const ptWant = () => {   // is the game waiting for letters right now?
   const reset = () => { box.value = PTYPE.pad; try { box.setSelectionRange(PTYPE.pad.length, PTYPE.pad.length); } catch (e) {} };
   const open = () => { reset(); box.focus({ preventScroll: true }); };
   let realAt = -1e9;   // a plugged-in keyboard's key (core.js already counts it, so the box must not count it again)
-  addEventListener('keydown', e => { if (e.key && (e.key.length === 1 || e.key === 'Backspace') && e.keyCode !== 229) realAt = performance.now(); }, true);
+  // (2026-11-20, the user: "back button for keyboard doesnt work in character creation") a phone keyboard's Backspace comes as
+  // key 'Backspace' with an empty code, which core.js can't count: only a key with a real code (a plugged-in keyboard) counts as real
+  addEventListener('keydown', e => { if (e.key && e.code && (e.key.length === 1 || e.key === 'Backspace') && e.keyCode !== 229) realAt = performance.now(); }, true);
   const tap = code => { pressed.add(code); keys.add(code); setTimeout(() => keys.delete(code), 50); };
   box.addEventListener('input', () => {
     const v = box.value, real = performance.now() - realAt < PTYPE.realKeyMs;

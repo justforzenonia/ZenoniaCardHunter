@@ -784,7 +784,15 @@ const CLASSES = [
 // hidden: no longer offered as a new hero (the Martial Artist); a saved hero of that class still plays
 // (2026-11-13, the user: "too many unusable characters"; they chose to keep ten) Iron Sentinel (a monster body with no attack, skill or
 // cast frames), Chef Daddy and OmegaKingX leave the select screen too. A saved hero of one of them still loads and plays.
-for (const n of ['Iron Sentinel', 'Chef Daddy']) { const C = CLASSES.find(q => q.name === n); if (C) C.hidden = true; }   // (OmegaKingX came back the same day: the user wants to play him)
+// (2026-11-20, the user) the Archer leaves the select screen, and OmegaKingX becomes a secret: pick the Assassin and name the
+// hero OmegaKingX (any upper / lower case) to get him instead (SECRET_HEROES, used by customDone in ui.js).
+for (const n of ['Iron Sentinel', 'Chef Daddy', 'OmegaKingX', 'Archer']) { const C = CLASSES.find(q => q.name === n); if (C) C.hidden = true; }
+const SECRET_HEROES = [{ from: 'Assassin', name: 'omegakingx', to: 'OmegaKingX' }];
+function secretHero(cls, name) {
+  const from = CLASSES[cls] && CLASSES[cls].name, nm = String(name || '').trim().toLowerCase();
+  const S = SECRET_HEROES.find(q => q.from === from && q.name === nm); if (!S) return -1;
+  return CLASSES.findIndex(q => q.name === S.to);
+}
 const CLASS_PICKS = () => CLASSES.map((C, i) => i).filter(i => !CLASSES[i].hidden);
 const BASE_STAT_CUT = 0.4;   // every class's starting HP, MP and attack, scaled once here (speed is left alone; 0.8, then halved 2026-11-13)
 for (const C of CLASSES) { C.hp = Math.round(C.hp * BASE_STAT_CUT); C.mp = Math.round(C.mp * BASE_STAT_CUT); C.atk = Math.round(C.atk * BASE_STAT_CUT); }

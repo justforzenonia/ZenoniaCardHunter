@@ -489,7 +489,9 @@ function customMenu(cls, profile) {
 const customBodyId = m => m.char || classBodyId(m.cls);
 function customPartRows(m) { const have = new Set([...heroPartsOf(customBodyId(m)), ...heroPartsOf(m.head)]); return Object.keys(HERO_PART_NAMES).filter(p => have.has(p)).map(p => 'p_' + p); }
 const customColourRows = m => { const P = customPartRows(m); return P.length ? P : m.char ? charBins(m).map((_, i) => 'c' + i) : ['hair', 'outfit', 'skin']; };
-const customRows = m => ['name', 'title', 'char', 'head', ...customColourRows(m), 'wglow', 'aura', ...(m.edit && typeof weaponLookOk === 'function' && weaponLookOk(m.cls) ? ['wart'] : []), ...(m.edit ? ['wardrobe'] : []), 'done'];   // (Wardrobe: the Stylist only, three saved looks) (hero parts creator, charmake.js: a body and a head from the full heroes, then that body's own colours; the class look keeps hair / outfit / skin)
+// (2026-11-20, the user: "remove head and body from character create menu") a new hero wears the class's own body and head;
+// the Body and Head rows stay only at the Stylist (m.edit), so a saved hero keeps and can still change theirs
+const customRows = m => ['name', 'title', ...(m.edit ? ['char', 'head'] : []), ...customColourRows(m), 'wglow', 'aura', ...(m.edit && typeof weaponLookOk === 'function' && weaponLookOk(m.cls) ? ['wart'] : []), ...(m.edit ? ['wardrobe'] : []), 'done'];   // (Wardrobe: the Stylist only, three saved looks) (hero parts creator, charmake.js: a body and a head from the full heroes, then that body's own colours; the class look keeps hair / outfit / skin)
 const CUSTOM_LABEL = { wart: 'Weapon look', wardrobe: 'Wardrobe', name: 'Name', title: 'Title', char: 'Body', head: 'Head', hair: 'Hair', outfit: 'Outfit', skin: 'Skin', wglow: 'Weapon glow', aura: 'Aura' };
 const CUSTOM_SETS = m => ({ ...Object.fromEntries(charBins(m).map((_, i) => ['c' + i, [STYLE_IDS, STYLE_COLORS]])), ...Object.fromEntries(Object.keys(HERO_PART_NAMES).map(p => ['p_' + p, p === 'skin' ? [Object.keys(SKIN_TONES), SKIN_TONES] : [STYLE_IDS, STYLE_COLORS]])), hair: [STYLE_IDS, STYLE_COLORS], outfit: [STYLE_IDS, STYLE_COLORS], skin: [Object.keys(SKIN_TONES), SKIN_TONES],
   wglow: [Object.keys(WEAPON_GLOWS), WEAPON_GLOWS], aura: [Object.keys(AURAS), AURAS] });
@@ -593,7 +595,7 @@ function updateCustom(game, m, dt) {
   });
   if (hit('KeyR') && row !== 'name' || clicked(CUS.rnd.x, CUS.rnd.y, CUS.rnd.w, CUS.rnd.h)) {   // a whole new look at random
     const ids = charList('b').map(c => c.id);   // a body and head from the full heroes (or the class look), then colours for that body
-    m.char = Math.random() < 0.25 ? null : pick(ids); m.head = m.char && Math.random() < 0.5 ? pick(ids) : null;
+    m.char = !m.edit || Math.random() < 0.25 ? null : pick(ids); m.head = m.char && Math.random() < 0.5 ? pick(ids) : null;   // (a new hero: the class's own body and head)
     const S2 = CUSTOM_SETS(m); for (const k in S2) m[k] = pick(S2[k][0]);
     m.title = pick(TITLES);
   }
@@ -608,10 +610,14 @@ function customDone(game, m) {
   const look = lookOf(m);
   if (m.edit) { game.profile.look = look; game.save(); game.closeMenu(); game.refreshPlayer(); game.toast('Looking sharp!', '#ffe9a8'); return; }
   if (!m.partner) { game.menu = partnerWarn(m); return; }   // the hero is made: the warning, then who stands beside them (heropartner.js)
+  // the secret hero: an Assassin named OmegaKingX becomes OmegaKingX, in his own body and colours (the name, title and glow stay)
+  const sec = typeof secretHero === 'function' ? secretHero(m.cls, look.name) : -1;
+  if (sec >= 0) { m.cls = sec; Object.assign(look, { char: null, hair: CLASSES[sec].hair, outfit: CLASSES[sec].outfit, skin: 'orig' }); }
   game.profile = newProfile(m.cls); game.profile.look = look; game.profile.partner = partnerNew(m.partner); game.save(); game.closeMenu();
   // a new hero gets a new world: the Wilds are generated at load, so reload once and carry on straight into the hub
-  if (game.profile.worldSeed !== WORLD_SEED) { try { sessionStorage.setItem('zch_autostart', '1'); } catch (e) {} location.reload(); return; }
+  if (game.profile.worldSeed !== WORLD_SEED) { try { sessionStorage.setItem('zch_autostart', '1'); if (sec >= 0) sessionStorage.setItem('zch_secret', '1'); } catch (e) {} location.reload(); return; }
   game.goHub();
+  if (sec >= 0) game.toast('A hidden hero answers: OmegaKingX!', '#ffd23f');
 }
 function drawCustom(game, m, now) {
   ctx.fillStyle = 'rgba(14,9,6,0.86)'; ctx.fillRect(0, 0, VW, VH); cusFit(m);
@@ -687,7 +693,7 @@ function drawCustom(game, m, now) {
   panel(R.x, R.y, R.w, R.h, '#8a6ad0', 'rgba(50,33,21,0.92)');
   text('🎲 RANDOMIZE (R)', R.x + R.w / 2, R.y + R.h / 2, '#d8c8ff', 8);
   text(customRows(m)[m.row] === 'wardrobe' ? '←→ choose a slot · Enter or click: wear that look, or save into an empty slot · V: save over this slot · Esc back'
-    : '↑↓ choose row · ←→ change · Enter on Body or Head: pick a hero · type your name · R randomize · Esc back', VW / 2, 340, '#c9c1a8', 8);
+    : m.edit ? '↑↓ choose row · ←→ change · Enter on Body or Head: pick a hero · type your name · R randomize · Esc back' : '↑↓ choose row · ←→ change · type your name · R randomize · Esc back', VW / 2, 340, '#c9c1a8', 8);
 }
 
 // art for skill cards that have no monster (Chef Daddy's kitchen): a 32x32 pixel icon from assets/chef_icons.png,

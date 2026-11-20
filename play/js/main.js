@@ -489,6 +489,8 @@ preloadAll().then(diskRestore).then(() => new Promise(r => setTimeout(r, 30))).t
   game.profile = null;
   let auto = false; try { auto = sessionStorage.getItem('zch_autostart') === '1'; sessionStorage.removeItem('zch_autostart'); } catch (e) {}
   if (auto && game.saved) { game.profile = game.saved; game.closeMenu(); game.goHub(); }   // just made a new hero: their new world is ready
+  { let sec = false; try { sec = sessionStorage.getItem('zch_secret') === '1'; sessionStorage.removeItem('zch_secret'); } catch (e) {}
+    if (sec && game.profile) game.toast('A hidden hero answers: OmegaKingX!', '#ffd23f'); }   // (the secret Assassin name, ui.js customDone)
   if (game.diskRestored) { game.toast(`Save restored from disk: ${(game.saved.look && game.saved.look.name) || 'your hero'}, Lv ${game.saved.lv}`, '#8fffb0'); if (game.menu && game.menu.type === 'title') game.menu.cur = 1; }   // (CONTINUE picked)
   { const s = document.getElementById('load'); if (s) s.remove(); }
   requestAnimationFrame(frame);

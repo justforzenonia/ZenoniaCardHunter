@@ -178,7 +178,7 @@ function charChoose(game, m) {
   const it = charItems(m)[m.cur], B = m.back; if (m.field === 'head' && it.id && !B.char) B.char = classBodyId(B.cls) || it.id;   // (a head needs a body: the class's own)
   B[m.field] = it.id; if (!B.char) B.head = null;
   for (let i = 0; i < CHAR_COLOURS; i++) B['c' + i] = 'orig';
-  B.row = customRows(B).indexOf(m.field); if (B.row < 0) B.row = customRows(B).indexOf('char'); game.menu = B;
+  B.row = customRows(B).indexOf(m.field); if (B.row < 0) B.row = Math.max(0, customRows(B).indexOf('char')); game.menu = B;
 }
 function updateCharPick(game, m) {
   const k = navInput(), P = CHAR_PICK, n = charItems(m).length, tab = t => { const T = pickTabs(m); m.tab = (t + T.length) % T.length; m.cur = 0; m.scroll = 0; };

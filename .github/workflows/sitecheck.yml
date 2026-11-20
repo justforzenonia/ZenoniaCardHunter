@@ -17,7 +17,7 @@ jobs:
           node-version: '22'
       - name: wait for the new site (only right after a push)
         if: github.event_name == 'push'
-        run: sleep 150
+        run: sleep 240
       - name: the game server answers
         run: curl -fsS --max-time 90 "$SERVER/health" || (sleep 45 && curl -fsS --max-time 90 "$SERVER/health")
         env:
@@ -25,4 +25,6 @@ jobs:
       - name: the live game loads and plays
         run: |
           set -o pipefail
+          node tools/smoke_test.js --live --wait 180 2>&1 | tee smoke.txt && exit 0
+          echo "first try failed: once more in a minute (a site still publishing, or a slow wake-up)"; sleep 60
           node tools/smoke_test.js --live --wait 180 2>&1 | tee smoke.txt || { tail -n 25 smoke.txt | sed 's/^/::error::/'; exit 1; }

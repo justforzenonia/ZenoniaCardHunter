@@ -28,7 +28,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         p = (getattr(self, 'path', '') or '').split('?')[0]
         # (/health too, 2026-11-20: the website's "Server online" light on GitHub Pages asks it from another site, and without this
         # header the browser hid the answer, so the light said "Server down" while the server was up)
-        return p.startswith('/market/') or p.startswith('/net/') or p in ('/save/share', '/health', '/cloud/save')   # (co-op too: the app and the website's game meet in the same rooms)
+        return p.startswith('/market/') or p.startswith('/net/') or p in ('/save/share', '/health', '/cloud/save', '/stats/hello')   # (co-op too: the app and the website's game meet in the same rooms)
 
     def _private(self):   # (public server: what belongs to one PC only)
         p = (getattr(self, 'path', '') or '').split('?')[0]
@@ -261,6 +261,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/net/'): return self._net('GET')
         if self.path.split('?')[0] in ('/save', '/save/list', '/save/archive', '/save/share'): return self._save('GET')
         if self.path.split('?')[0] == '/cloud/save': return self._cloud('GET')
+        if self.path.split('?')[0] == '/stats': return self._stats('GET')
         if self.path.split('?')[0] == '/photo/list': return self._photo_list()
         return super().do_GET()
 
@@ -279,6 +280,7 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/net/'): return self._net('POST')
         if self.path.split('?')[0] in ('/save', '/save/share'): return self._save('POST')
         if self.path.split('?')[0] == '/cloud/save': return self._cloud('POST')
+        if self.path.split('?')[0] == '/stats/hello': return self._stats('POST')
         if self.path.split('?')[0] == '/photo': return self._photo()
         self.send_error(405)
 
@@ -319,6 +321,39 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         except Exception: return self.send_error(503)
         return out(json.dumps({ 'ok': 1, 'at': int(now * 1000) }).encode())
 
+    # PLAYER COUNT (2026-11-20; the user: "next", the last idea on the list). The website's game and the phone app say hello once
+    # each time they start (js/playcount.js) with a random id made on that device (not tied to a name, a save or anything else).
+    # The server only adds a hash of it to a HyperLogLog per day and per platform, a counter that tells how many different ids
+    # it has seen but cannot list them, and keeps those 35 days. /stats shows the numbers: today, the last 7 and 30 days, app or
+    # website. In Upstash on the hosted server, in memory on a PC.
+    def _stats(self, method):
+        import json, re, hashlib, urllib.parse
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        day = lambda back=0: time.strftime('%Y%m%d', time.gmtime(time.time() - back * 86400))
+        if method == 'POST':
+            dev = (q.get('d') or [''])[0]; plat = (q.get('p') or [''])[0]
+            if not re.fullmatch(r'[A-Za-z0-9]{12,40}', dev) or plat not in ('web', 'app'): return self.send_error(400)
+            h = hashlib.sha256(('zenonia-count:' + dev).encode()).hexdigest()[:24]
+            try:
+                for key in ('stats:all:' + day(), 'stats:%s:%s' % (plat, day())):
+                    if KV_URL: kv(['PFADD', key, h]); kv(['EXPIRE', key, str(35 * 86400)])
+                    else: STATS_MEM.setdefault(key, set()).add(h)
+            except Exception: return self.send_error(503)
+            self.send_response(204); self.end_headers(); return
+        def count(keys):
+            if KV_URL: return int(kv(['PFCOUNT', *keys]) or 0)
+            u = set();
+            for k in keys: u |= STATS_MEM.get(k, set())
+            return len(u)
+        try:
+            res = { 'today': count(['stats:all:' + day()]), 'last_7_days': count(['stats:all:' + day(i) for i in range(7)]),
+                    'last_30_days': count(['stats:all:' + day(i) for i in range(30)]),
+                    'today_app': count(['stats:app:' + day()]), 'today_website': count(['stats:web:' + day()]),
+                    'days': { day(i): count(['stats:all:' + day(i)]) for i in range(14) }, 'note': 'different devices that opened the game (UTC days)' }
+        except Exception: return self.send_error(503)
+        b = json.dumps(res, indent=1).encode()
+        self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b)
+
     def _photo(self):
         # PHOTO (F2 in the game, js/photo.js): a JPEG of the world, saved into the game folder's photos/ (this computer only)
         import time
@@ -340,6 +375,7 @@ import threading, time
 ROOMS, NET_LOCK, NET_IPS = {}, threading.Lock(), None
 SHARES = {}   # (moving a hero: code -> (profile bytes, expiry), _save /save/share)
 SAVE_LOCK = threading.Lock()
+STATS_MEM = {}   # (player count on a PC: day key -> set of hashed ids; the hosted server keeps them in Upstash)
 CLOUD_LAST, CLOUD_MAX = {}, 400 << 10   # (online backups: when each code last saved; the biggest hero accepted, 400 KB)
 MARKET_LOCK, MARKET_DAYS, MARKET_MAX = threading.Lock(), 7, 20   # (the market board: one change at a time; listings last a week; 20 each)
 MARKET_ALL, MARKET_POSTS = 600, {}   # (2026-11-20: at most 600 listings on the board; each address's recent post times)

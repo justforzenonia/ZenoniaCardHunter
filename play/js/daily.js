@@ -79,15 +79,40 @@ function weeklyTick(game, w) {
   const R = REGIONS[regionIndexAt(p.x)]; if (!R || R.zone < 0) return;
   if ((w.lordWait = (w.lordWait || 0) + 16) < 20000) return;   // twenty seconds into the Wilds, it comes
   const z = R.zone, Z = ZONES[z], sp = Z.mobs.filter(id => D.monsters[id]).sort((a, b) => SPECIES[b].hp - SPECIES[a].hp)[0];
-  const fwd = p.dir === 3 ? -200 : 200, side = [fwd, -fwd].map(dx => findOpen(w, p.x + dx, p.y)).find(q => !inTown(q.x) && (REGIONS[regionIndexAt(q.x)] || {}).zone === z);   // ahead of you, else behind: never in a town or the next zone
+  const fwd = p.dir === 3 ? -LORD_WAIT.at : LORD_WAIT.at, side = [fwd, -fwd].map(dx => findOpen(w, p.x + dx, p.y)).find(q => !inTown(q.x) && (REGIONS[regionIndexAt(q.x)] || {}).zone === z);   // ahead of you, else behind: never in a town or the next zone
   if (!side) return; const at = side;
+  lordWaitWrap();
   const m = makeMonster(sp, Z.ranks[1], at.x, at.y);
-  Object.assign(m, { boss: true, weeklyLord: true, lordZone: z, scale: 2.2, heavy: true, label: seasonWeek(pr).lord, shiny: true, home: { x: at.x, y: at.y } });
+  Object.assign(m, { boss: true, weeklyLord: true, lordWaiting: true, lordZone: z, scale: 2.2, heavy: true, label: seasonWeek(pr).lord, shiny: true, home: { x: at.x, y: at.y } });
   m.maxHp = m.hp = Math.round(m.maxHp * 12); m.atk *= 1.5; giveWildKit(m);
   w.actors.push(m);
-  w.rings.push({ x: at.x, y: at.y, r: 60, t: 0, col: '#c890ff' }, { x: at.x, y: at.y, r: 36, t: -150, col: '#ffffff' });
-  w.shake = Math.max(w.shake || 0, 8); w.flash = { t: 0, dur: 800, col: '#c890ff' };
-  game.toast(`◉ THE ${seasonWeek(pr).lord.toUpperCase()} HAS COME — it appears once a week. Bring it down!`, '#c890ff');
+  w.rings.push({ x: at.x, y: at.y, r: 44, t: 0, col: '#c890ff' });   // (a soft sign where it stands: no shake, no flash)
+  game.toast(`◉ The ${seasonWeek(pr).lord} waits nearby. Walk up to it when you're ready: it won't come to you.`, '#c890ff');
+}
+// THE LORD WAITS (2026-11-20; the user chose "Calmer Lord"): until this week's Lord is beaten it came for you 20 s into every
+// trip to the Wilds, with a shake and a flash. Now it appears a little way off (LORD_WAIT.at) and stands still, thinking
+// nothing, until you walk up to it (LORD_WAIT.wake) or hit it; then it rises (a small shake) and fights as before.
+const LORD_WAIT = { at: 260, wake: 70 };
+{
+  const ai = monsterAI;
+  monsterAI = (world, m, dt) => {
+    if (!m.weeklyLord || !m.lordWaiting) return ai(world, m, dt);
+    const near = world.actors.some(a => a.kind === 'player' && !a.dead && Math.hypot(a.x - m.x, a.y - m.y) < LORD_WAIT.wake);
+    if (near || (m.maxHp && m.hp < m.maxHp)) {
+      m.lordWaiting = false; world.shake = Math.max(world.shake || 0, 3);
+      world.rings.push({ x: m.x, y: m.y, r: 56, t: 0, col: '#c890ff' });
+      if (window.GAME && GAME.world === world) GAME.toast(`◉ The ${m.label || 'Lord'} rises!`, '#c890ff');
+      return ai(world, m, dt);
+    }
+    m.vx = 0; m.vy = 0;   // (it waits where it stands)
+  };
+}
+// its boss abilities (bosses.js bossKitTick: rings, bolts, hazards) run outside monsterAI, so they wait too. bosses.js loads
+// AFTER this file, so the wrap is made when the first Lord appears (lordWaitWrap, from weeklyTick), never at load.
+function lordWaitWrap() {
+  if (LORD_WAIT.wrapped || typeof bossKitTick !== 'function') return;
+  const kt = bossKitTick; LORD_WAIT.wrapped = true;
+  bossKitTick = (world, a, dt) => (a.weeklyLord && a.lordWaiting ? undefined : kt(world, a, dt));
 }
 function lordKill(game, w, m) {
   const pr = game.profile, W = weeklyState(pr), z = m.lordZone || 0, Z = ZONES[z];

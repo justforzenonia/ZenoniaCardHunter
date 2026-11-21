@@ -180,6 +180,17 @@ const SHAKE_CAP = 3;
 // the pause menu (pvp.js) gets SETTINGS, under UNLOCKS
 PAUSE_OPTS.splice(PAUSE_OPTS.findIndex(o => o.id === 'hub'), 0, { id: 'settings', title: 'SETTINGS', sub: 'Language, volume, music, screen shake, tips', col: '#9fd8ff' });
 {
+  // (2026-11-20) the list SCROLLS: rows were squeezed to fit the screen (10 px each at 27 rows, about to overlap), now every row
+  // keeps SET_LIST.rh and the list shows as many as fit, moving to keep the chosen one in view (a row of space above and below)
+  const SET_LIST = { rh: 16, W: 340 };
+  const setLayout = m => {
+    const n = SET_ROWS.length, vis = Math.min(n, Math.floor((VH - 24 - 54 - 16) / SET_LIST.rh)), row = m.row || 0;
+    let top = Math.max(0, Math.min(m.top || 0, n - vis));
+    if (row < top + 1) top = Math.max(0, row - 1); if (row > top + vis - 2) top = Math.min(n - vis, row - vis + 2);
+    m.top = top;
+    const W = SET_LIST.W, H = 54 + vis * SET_LIST.rh, x = VW / 2 - W / 2, y = VH / 2 - H / 2;
+    return { RH: SET_LIST.rh, vis, top, W, H, x, y, rowY: i => y + 34 + (i - top) * SET_LIST.rh };
+  };
   const up = updatePause;
   updatePause = (game, m, dt) => {
     if (m.view === 'keys') {
@@ -193,6 +204,8 @@ PAUSE_OPTS.splice(PAUSE_OPTS.findIndex(o => o.id === 'hub'), 0, { id: 'settings'
     if (m.view === 'settings') {
       m.t += dt; const k = navInput(), n = SET_ROWS.length; m.row = m.row || 0;
       if (k.u) m.row = (m.row + n - 1) % n; if (k.d) m.row = (m.row + 1) % n;
+      { const L = setLayout(m);   // (a click or tap: picks a row, and on the chosen row acts like Enter)
+        for (let i = L.top; i < L.top + L.vis; i++) if (clicked(L.x + 10, L.rowY(i) - L.RH / 2, L.W - 20, L.RH)) { if (i === m.row) k.ok = true; else { m.row = i; m.t = Math.max(m.t, 121); } } }
       const R = SET_ROWS[m.row];
       if (!R.steps) { if ((k.ok || k.r) && m.t > 120) { if (R.act) { m.t = 0; R.act(); } else { m.view = 'keys'; m.t = 0; m.krow = 0; } } else if (k.back && m.t > 120) { m.view = null; m.t = 0; } return; }
       const i = R.steps.indexOf(SET[R.id]);
@@ -211,18 +224,21 @@ PAUSE_OPTS.splice(PAUSE_OPTS.findIndex(o => o.id === 'hub'), 0, { id: 'settings'
     dp(game, m, now);
     if (m.view === 'keys') return drawSetKeys(m);
     if (m.view !== 'settings') return;
-    const RH = Math.min(26, Math.floor((VH - 24 - 54) / SET_ROWS.length)), W = 340, H = 54 + SET_ROWS.length * RH, x = VW / 2 - W / 2, y = VH / 2 - H / 2;   // (RH: rows tighten so every row fits on screen)
+    const L = setLayout(m), { RH, W, H, x, y } = L;
     ctx.fillStyle = 'rgba(6,4,14,0.6)'; ctx.fillRect(0, 0, VW, VH);
     ctx.fillStyle = '#100a18'; rrect(ctx, x, y, W, H, 6); ctx.fill();   // (solid: the menu under it does not show through)
     ctx.strokeStyle = goldFrameGrad(y, H); ctx.lineWidth = 1.2; rrect(ctx, x + 0.5, y + 0.5, W - 1, H - 1, 6); ctx.stroke();
     goldText('SETTINGS', VW / 2, y + 14, 11, { spacing: 2 });
+    if (L.top > 0) text(`▲ ${L.top} more`, x + W / 2, y + 25, '#9fd8ff', 7);
+    if (L.top + L.vis < SET_ROWS.length) text(`▼ ${SET_ROWS.length - L.top - L.vis} more`, x + W / 2, y + H - 18, '#9fd8ff', 7);
     SET_ROWS.forEach((R, i) => {
-      const ry = y + 34 + i * RH, sel = i === (m.row || 0);
+      if (i < L.top || i >= L.top + L.vis) return;
+      const ry = L.rowY(i), sel = i === (m.row || 0);
       if (sel) { ctx.fillStyle = 'rgba(159,216,255,0.12)'; rrect(ctx, x + 10, ry - RH / 2 + 1, W - 20, RH - 2, 4); ctx.fill(); }
       text(R.name, x + 22, ry, sel ? '#9fd8ff' : '#e8e2cf', 8, 'left');
       text(R.steps ? `◀  ${R.label(SET[R.id])}  ▶` : `${R.label()}  ▶`, x + W - 22, ry, sel ? '#ffffff' : '#b8b0c8', 8, 'right');
     });
-    text('↑↓ choose · ←→ change · Esc back', VW / 2, y + H - 8, '#9a917c', 6.5);
+    text('↑↓ choose · ←→ change · click or tap a row · Esc back', VW / 2, y + H - 7, '#b8b0a0', 7);
   };
 }
 // the CONTROLS page

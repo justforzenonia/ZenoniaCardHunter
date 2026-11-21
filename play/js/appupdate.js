@@ -35,7 +35,7 @@ async function appUpdateCheck(force) {
   if (!window.ZCH_SITE || !window.ZCH_BUILD) return null;
   let info = null;
   try { info = await (await fetch(`${window.ZCH_SITE}version.json?t=${Date.now()}`, { cache: 'no-store' })).json(); } catch (e) { return null; }
-  if (!info || !info.apk_build || !appBuildNewer(info.apk_build, window.ZCH_BUILD)) return info;
+  if (!info || !info.apk_build || !appBuildNewer(info.apk_build, window.ZCH_APK_BUILD || window.ZCH_BUILD)) return info;   // (ZCH_APK_BUILD: the app's own build, when boot.js runs the website's newer game)
   let later = null; try { later = localStorage.getItem(APPUP.later); } catch (e) {}
   if (later === info.apk_build && !force) return info;
   appUpdateCard(info);

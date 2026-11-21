@@ -3,11 +3,39 @@
 // to leave a black screen. Each file is fetched with a time limit and retried until it arrives whole, then all of
 // them run in order.
 (async function boot() {
+  // LIVE UPDATES FOR THE PHONE APP (2026-11-20; the user: "can the game be updated directly from the apk so dont have to
+  // redownload a new apk"). The app carries a built-in copy of the game. When it starts online and the website (window.ZCH_SITE)
+  // has a NEWER build, a <base> tag points every relative address at the website's play/ folder and the website's own boot.js
+  // runs instead, so the newest code, data and art load from there (the art pack is kept in the phone's cache by its version).
+  // The save stays where it is (the page's own storage). Offline, slow (LIVE.wait) or a build that failed here before
+  // (zch_live_bad), it plays the built-in copy. window.ZCH_APK_BUILD keeps the app's own build for the update card (appupdate.js).
+  const LIVE = { wait: 4000, bad: 'zch_live_bad' };
+  const liveNative = () => !!(window.Capacitor && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform());
+  const liveTime = t => { const m = /-(\d{14})$/.exec(String(t || '')); return m ? m[1] : '0'; };
+  if (!window.ZCH_LIVE && window.ZCH_SITE && window.ZCH_BUILD && (liveNative() || /[?&]livetest=1/.test(location.search))) {
+    window.ZCH_APK_BUILD = window.ZCH_BUILD;
+    try {
+      const ac = new AbortController(), tm = setTimeout(() => ac.abort(), LIVE.wait);
+      const html = await (await fetch(`${window.ZCH_SITE}play/index.html?t=${Date.now()}`, { cache: 'no-store', signal: ac.signal })).text();
+      const m = /window\.ZCH_BUILD = '([^']+)'/.exec(html); let bad = null; try { bad = localStorage.getItem(LIVE.bad); } catch (e) {}
+      if (m && liveTime(m[1]) > liveTime(window.ZCH_BUILD) && bad !== m[1]) {
+        const src = await (await fetch(`${window.ZCH_SITE}play/js/boot.js?v=${m[1]}`, { cache: 'no-store', signal: ac.signal })).text();
+        clearTimeout(tm);
+        if (/const FILES = \[/.test(src)) {
+          window.ZCH_LIVE = m[1]; window.ZCH_BUILD = m[1];
+          const b = document.createElement('base'); b.href = `${window.ZCH_SITE}play/`; document.head.prepend(b);
+          const s = document.createElement('script'); s.textContent = src + `\n//# sourceURL=${window.ZCH_SITE}play/js/boot.js`; document.body.appendChild(s);
+          return;
+        }
+      }
+      clearTimeout(tm);
+    } catch (e) {}
+  }
   const FILES = ['assets/data.js', 'assets/z2fields.js', 'assets/items2.js', 'assets/card_frames.js', 'assets/chef_body.js', 'assets/archer_body.js', 'assets/custom_banks.js', 'assets/cave_arch.js', 'assets/extra_npcs.js', 'assets/extra_npcs2.js', 'assets/raid_bosses.js', 'assets/raid_bosses2.js', 'assets/traps.js', 'assets/cave_maps.js', 'assets/objects2.js', 'assets/vehicles.js', 'assets/vehicles8.js', 'assets/home_art.js', 'assets/spell_fx.js', 'assets/spellcraft.js', 'assets/kiblast.js', 'js/i18n.js', 'js/core.js', 'js/objects2.js', 'js/sfx.js', 'js/defs.js', 'js/folk.js',
     'js/style.js', 'js/effects.js', 'js/combat.js', 'js/worldgen.js', 'js/world.js', 'js/townair.js', 'js/plateaus.js', 'js/townterrace.js', 'js/fieldpatches.js', 'js/villagegrass.js', 'js/props.js', 'js/caves.js', 'js/rifts.js', 'js/journey.js', 'js/daynight.js', 'js/events.js', 'js/dining.js', 'js/pet.js', 'js/wanderers.js', 'js/story.js', 'js/rent.js', 'js/titles.js', 'js/safepoints.js', 'js/dojo.js', 'js/towns.js', 'js/mimic.js', 'js/sideareas.js', 'js/ki.js',
     'js/houses.js', 'js/ui.js', 'js/heroparts.js', 'js/charmake.js', 'js/heropartner.js', 'js/partnerstyle.js', 'js/weaponlook.js', 'js/inventory.js', 'js/loadouts.js', 'js/deckplus.js', 'js/charsheet.js', 'js/invextras.js', 'js/layers.js', 'js/guard.js', 'js/foeguard.js', 'js/foecharge.js', 'js/foeroles.js', 'js/combopay.js', 'js/riposte.js', 'js/elemreact.js', 'js/elemweak.js', 'js/flawless.js', 'js/breather.js', 'js/foewindup.js', 'js/statustimer.js', 'js/laststretch.js', 'js/lootsweep.js', 'js/rally.js', 'js/foeturns.js', 'js/calmfoes.js','js/combattitles.js','js/foeelite.js', 'js/cards.js', 'js/hud.js', 'js/combotimer.js', 'js/cardchain.js', 'js/ecnegun.js', 'js/reacthint.js', 'js/aimmark.js','js/gacha.js', 'js/quests.js', 'js/tips.js', 'js/pvp.js', 'js/training.js', 'js/trainreact.js', 'js/buffbar.js', 'js/dev.js', 'js/storybeats.js', 'js/layerscene.js', 'js/chapters.js', 'js/daily.js', 'js/bosses.js', 'js/shadowself.js', 'js/trials.js', 'js/landmarks.js', 'js/townlife.js', 'js/chi.js', 'js/wellquest.js', 'js/sidequests.js', 'js/kibomb.js', 'js/pachinko.js', 'js/casino.js', 'js/cabinet.js', 'js/questmark.js',
     'js/home.js', 'js/rainyday.js', 'js/shop.js', 'js/season.js', 'js/tower.js', 'js/collection.js', 'js/sites.js', 'js/animals.js', 'js/nodes.js', 'js/farmyard.js', 'js/farmrow.js', 'js/craft.js', 'js/folkday.js', 'js/curios.js', 'js/farmboard.js', 'js/relichall.js', 'js/bondcards.js', 'js/deckcircuit.js', 'js/evilgate.js', 'js/layerswords.js', 'js/durability.js', 'js/raidcards.js', 'js/raids.js', 'js/tentfolk.js', 'js/homelife.js', 'js/gamelog.js', 'js/skillforms.js', 'js/arcana2.js', 'js/bgm.js', 'js/vehicles.js', 'js/coop.js', 'js/net.js', 'js/nettrade.js', 'js/netduel.js', 'js/netparty.js', 'js/netboss.js', 'js/netquest.js', 'js/netfarm.js', 'js/netdungeon.js', 'js/netpets.js', 'js/netplay.js', 'js/netsocial.js', 'js/netsfx.js', 'js/netsidekick.js', 'js/main.js', 'js/arcana2gift.js', 'js/unlocks.js', 'js/settings.js', 'js/touch.js', 'js/gamepad.js', 'js/savearchive.js', 'js/book.js', 'js/arcanabook.js', 'js/followfix.js', 'js/radar.js', 'js/beltmove.js', 'js/sessionrecap.js', 'js/mirror.js', 'js/lookchat.js', 'js/cues.js', 'js/savemark.js', 'js/pats.js', 'js/photo.js', 'js/bedtime.js', 'js/diary.js', 'js/dojolesson.js', 'js/journal.js', 'js/rockcaves.js', 'js/origcaves.js', 'js/cavetraps.js', 'js/cavemap.js', 'js/cavehazards.js', 'js/desert.js', 'js/vehsound.js', 'js/phonetype.js', 'js/savefile.js', 'js/credits.js', 'js/staticmode.js', 'js/appupdate.js', 'js/cloudsave.js', 'js/feedback.js', 'js/playcount.js', 'js/fpsmeter.js', 'js/deckcursor.js', 'js/bigsummon.js', 'js/travelpoints.js', 'js/goddess.js', 'js/roadfolk.js', 'js/z2links.js', 'js/fusionguide.js', 'js/bondpick.js', 'js/tidyworld.js', 'js/goddesstown.js', 'js/towngates.js', 'js/z2tint.js', 'js/morecards.js', 'js/market.js', 'js/marketcheck.js', 'js/cavepath.js', 'js/foodcards.js', 'js/cavetreasure.js', 'js/rankladder.js', 'js/housevisitors.js'];
-  const v = '1.0.0-20261120201440', status = document.getElementById('load');
+  const v = '1.0.0-20261120203035', status = document.getElementById('load');
   try { if (status && sessionStorage.getItem('zch_autostart') === '1') status.textContent = 'Building your new world…'; } catch (e) {}
   // THE LOADING BAR (2026-11-08, release prep): every download reports its bytes, and the message under the logo becomes
   // "Loading… 42%" over a thin gold bar. (core.js replaces the message with 'Building the world…' once the scripts run.)
@@ -60,7 +88,10 @@
   window.ASSET_PACK = await pack;
   for (let i = 0; i < FILES.length; i++) {   // …and run in order
     let src;
-    try { src = await texts[i]; } catch (e) { if (status) status.textContent = `Could not load ${FILES[i]} — check that the game server is running, then reload.`; return; }
+    try { src = await texts[i]; } catch (e) {
+      if (window.ZCH_LIVE) { try { localStorage.setItem('zch_live_bad', window.ZCH_LIVE); } catch (er) {} location.reload(); return; }   // (the website's build would not load here: play the built-in copy)
+      if (status) status.textContent = `Could not load ${FILES[i]} — check that the game server is running, then reload.`; return;
+    }
     const s = document.createElement('script');
     s.textContent = src + `\n//# sourceURL=${FILES[i]}`;
     document.body.appendChild(s);

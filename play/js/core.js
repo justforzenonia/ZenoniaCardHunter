@@ -41,6 +41,7 @@ function img(src) {
     i = IMGS[src] = new Image(); i.tries = 0;
     i.addEventListener('error', () => { if (++i.tries < 6) setTimeout(() => { i.src = `${src}?v=${IMG_STAMP}&r=${i.tries}`; }, 300 * i.tries); });   // a dropped request tries again
     const P = window.ASSET_PACK && ASSET_PACK.index[src];   // from the pack if it's in there (tools/build_pack.py)
+    if (!P && window.ZCH_LIVE) i.crossOrigin = 'anonymous';   // (the app running the website's game, boot.js: an image from the website, asked for so the canvas can still read its pixels)
     i.src = P ? URL.createObjectURL(new Blob([ASSET_PACK.bytes.subarray(P[0], P[0] + P[1])], { type: src.endsWith('.jpg') ? 'image/jpeg' : 'image/png' })) : src + '?v=' + IMG_STAMP;
   }
   return i;

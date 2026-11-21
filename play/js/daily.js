@@ -70,10 +70,12 @@ function payContract(game, c, D2) {
 }
 
 // ---------------------------------------------------------------- the weekly Black Hole Lord
+const WEEKLY_LORD_LV = 5;   // the weekly Lord only comes for heroes of this level or higher
 function weeklyState(pr) { const wk = weekNo(); if (!pr.weekly || pr.weekly.week !== wk) pr.weekly = { week: wk, done: false }; return pr.weekly; }
 function weeklyTick(game, w) {
   const pr = game.profile, W = weeklyState(pr), p = w.player;
   if (W.done || w.interior || w.cave || !p || inTown(p.x) || w.actors.some(a => a.weeklyLord && !a.dead)) return;
+  if ((pr.lv || 1) < WEEKLY_LORD_LV) return;   // (2026-11-20, the user chose "from Level 5": it came for brand-new Lv 1 heroes 20 s into their first walk in the Wilds)
   const R = REGIONS[regionIndexAt(p.x)]; if (!R || R.zone < 0) return;
   if ((w.lordWait = (w.lordWait || 0) + 16) < 20000) return;   // twenty seconds into the Wilds, it comes
   const z = R.zone, Z = ZONES[z], sp = Z.mobs.filter(id => D.monsters[id]).sort((a, b) => SPECIES[b].hp - SPECIES[a].hp)[0];
